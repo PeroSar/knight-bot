@@ -6,10 +6,9 @@
 
 // Description: Sends a pastebin link of the replied message (or document) or the text given.
 
-use grammers_client::{
-    types::{InputMessage, Media, Message},
-    Client,
-};
+use grammers_client::media::Media;
+use grammers_client::message::{InputMessage, Message};
+use grammers_client::Client;
 use librustbin::{Client as RbinClient, PasteOptions};
 use std::fs;
 use tokio::fs as tokio_fs;
@@ -22,7 +21,7 @@ fn check_paste(url: &str) -> bool {
 }
 
 async fn fail_edit(msg: &Message) -> Result {
-    msg.edit(InputMessage::html("<b>Paste failed!</b>")).await?;
+    msg.edit(InputMessage::new().html("<b>Paste failed!</b>")).await?;
     return Ok(());
 }
 
@@ -38,7 +37,7 @@ async fn paste_edit(msg: &Message, content: String, filename: Option<String>) ->
         Ok(url_raw) => {
             let url = url_raw.trim().to_string();
             if check_paste(&url) {
-                msg.edit(InputMessage::html(format!("Link: {}", url)).link_preview(true))
+                msg.edit(InputMessage::new().html(format!("Link: {}", url)).link_preview(true))
                     .await?;
             } else {
                 fail_edit(&msg).await?;
@@ -51,23 +50,29 @@ async fn paste_edit(msg: &Message, content: String, filename: Option<String>) ->
     return Ok(());
 }
 
-pub async fn knightcmd_paste(client: Client, message: Message, past: String) -> Result {
-    const MAX_SIZE: i64 = 5 * 1024 * 1024;
+pub async fn knightcmd_paste(client: Client, message: &Message, past: String) -> Result {
+    const MAX_SIZE: usize = 5 * 1024 * 1024;
 
     let msg = message
-        .reply(InputMessage::html("<b>Pasting content...</b>"))
+        .reply(InputMessage::new().html("<b>Pasting content...</b>"))
         .await?;
 
     if let Some(reply) = client.get_reply_to_message(&message).await? {
-        if let Some(ref media @ Media::Document(ref doc)) = reply.media() {
-            if doc.size() > MAX_SIZE {
-                msg.edit(InputMessage::html(format!(
-                    "<b>File too large (max {}MB)</b>",
-                    MAX_SIZE / (1024 * 1024)
-                )))
-                .await?;
+        if let Some(media) = reply.media() {
+            let filename = if let Media::Document(ref doc) = media {
+                if doc.size().unwrap_or(0) > MAX_SIZE {
+                    msg.edit(InputMessage::new().html(format!(
+                        "<b>File too large (max {}MB)</b>",
+                        MAX_SIZE / (1024 * 1024)
+                    )))
+                    .await?;
+                    return Ok(());
+                }
+                doc.name().map(String::from)
+            } else {
+                fail_edit(&msg).await?;
                 return Ok(());
-            }
+            };
 
             let file_path = format!("/tmp/telegram_paste_{}", reply.id());
 
@@ -79,14 +84,6 @@ pub async fn knightcmd_paste(client: Client, message: Message, past: String) -> 
 
             let contents = String::from_utf8_lossy(&bytes).to_string();
 
-            let filename = {
-                let name = doc.name();
-                if name.is_empty() {
-                    None
-                } else {
-                    Some(name.to_string())
-                }
-            };
             paste_edit(&msg, contents, filename).await?;
 
             let _ = fs::remove_file(&file_path);
@@ -98,7 +95,7 @@ pub async fn knightcmd_paste(client: Client, message: Message, past: String) -> 
     } else if !past.is_empty() {
         paste_edit(&msg, past, None).await?;
     } else {
-        msg.edit(InputMessage::html(
+        msg.edit(InputMessage::new().html(
             "Please reply to a <b>message</b> or reply with <b>/paste yourtext</b> to paste it!",
         ))
         .await?;

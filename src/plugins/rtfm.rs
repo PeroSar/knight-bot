@@ -6,22 +6,19 @@
 
 // Description: Sends a RTFM text.
 
-use grammers_client::{
-    button, reply_markup,
-    types::{InputMessage, Message},
-    Client,
-};
+use grammers_client::message::{Button, InputMessage, Message, ReplyMarkup};
+use grammers_client::Client;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
-pub async fn knightcmd_rtfm(client: Client, message: Message) -> Result {
+pub async fn knightcmd_rtfm(client: Client, message: &Message) -> Result {
     if let Some(id) = message.reply_to_message_id() {
         client
             .send_message(
-                message.chat(),
-                InputMessage::html("How bout you...")
+                message.peer_ref().await.unwrap(),
+                InputMessage::new().html("How bout you...")
                     .reply_to(Some(id))
-                    .reply_markup(&reply_markup::inline(vec![vec![button::url(
+                    .reply_markup(ReplyMarkup::from_buttons(&vec![vec![Button::url(
                         "Read the fucking manual",
                         "https://readthefuckingmanual.com",
                     )]])),
@@ -30,8 +27,8 @@ pub async fn knightcmd_rtfm(client: Client, message: Message) -> Result {
     } else {
         message
             .reply(
-                InputMessage::html("How bout you...").reply_markup(&reply_markup::inline(vec![
-                    vec![button::url(
+                InputMessage::new().html("How bout you...").reply_markup(ReplyMarkup::from_buttons(&vec![
+                    vec![Button::url(
                         "Read the fucking manual",
                         "https://readthefuckingmanual.com",
                     )],

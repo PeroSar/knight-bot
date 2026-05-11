@@ -5,8 +5,9 @@
 //!
 
 use crate::{cfg, plugins};
-use grammers_client::{Client, Config, InitParams};
-use grammers_session::Session;
+use grammers_client::client::UpdatesConfiguration;
+use grammers_client::session::storages::SqliteSession;
+use grammers_client::{Client, SenderPool};
 use log;
 use std::sync::Arc;
 use tokio::task;
@@ -22,30 +23,33 @@ pub async fn async_main() -> Result {
     let token = &config.bot_token;
 
     log::info!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
-        api_id,
-        api_hash: api_hash.clone(),
-        params: InitParams {
-            ..Default::default()
-        },
-    })
-    .await?;
+    let session = Arc::new(SqliteSession::open(SESSION_FILE).await?);
+    let SenderPool {
+        runner,
+        updates,
+        handle,
+    } = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(handle.clone());
+    let pool_task = tokio::spawn(runner.run());
     log::info!("Connected!");
 
     if !client.is_authorized().await? {
         log::info!("Signing in...");
-        client.bot_sign_in(&token, api_id, &api_hash).await?;
-        client.session().save_to_file(SESSION_FILE)?;
+        client.bot_sign_in(&token, &api_hash).await?;
         log::info!("Signed in!");
     }
 
     log::info!("Waiting for messages...");
 
-    while let Some(update) = tokio::select! {
-        _ = tokio::signal::ctrl_c() => Ok(None),
-        result = client.next_update() => result,
-    }? {
+    let mut updates = client
+        .stream_updates(updates, UpdatesConfiguration::default())
+        .await;
+
+    loop {
+        let update = tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            update = updates.next() => update?,
+        };
         let handle = client.clone();
         task::spawn(async move {
             match plugins::handle_update(handle, update).await {
@@ -55,6 +59,8 @@ pub async fn async_main() -> Result {
         });
     }
 
-    client.session().save_to_file(SESSION_FILE)?;
+    updates.sync_update_state().await;
+    handle.quit();
+    let _ = pool_task.await;
     Ok(())
 }

@@ -7,20 +7,18 @@
 // Description: Says your lucky number.
 
 use crate::plugins;
-use grammers_client::{
-    types::{InputMessage, Message},
-    Client,
-};
+use grammers_client::message::{InputMessage, Message};
+use grammers_client::Client;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
-pub async fn knightcmd_luck(client: Client, message: Message) -> Result {
+pub async fn knightcmd_luck(client: Client, message: &Message) -> Result {
     let random_number = plugins::random(101); // modulo 101 to get a number between 0 to 100
     if let Some(id) = message.reply_to_message_id() {
         client
             .send_message(
-                message.chat(),
-                InputMessage::html(format!(
+                message.peer_ref().await.unwrap(),
+                InputMessage::new().html(format!(
                     "Your lucky number is: <code>{}</code>",
                     random_number
                 ))
@@ -29,7 +27,7 @@ pub async fn knightcmd_luck(client: Client, message: Message) -> Result {
             .await?;
     } else {
         message
-            .reply(InputMessage::html(format!(
+            .reply(InputMessage::new().html(format!(
                 "Your lucky number is: <code>{}</code>",
                 random_number
             )))

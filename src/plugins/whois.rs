@@ -6,15 +6,15 @@
 
 // Description: Checks WHOIS information of a given URL.
 
-use grammers_client::types::{InputMessage, Message};
+use grammers_client::message::{InputMessage, Message};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
-pub async fn knightcmd_whois(message: Message, site: String) -> Result {
+pub async fn knightcmd_whois(message: &Message, site: String) -> Result {
     if site.trim().is_empty() {
         message
-            .reply(InputMessage::html(
+            .reply(InputMessage::new().html(
                 "Send a <b>proper URL</b> to get WHOIS information!",
             ))
             .await?;
@@ -24,14 +24,14 @@ pub async fn knightcmd_whois(message: Message, site: String) -> Result {
         || site.starts_with("www.")
     {
         message
-            .reply(InputMessage::html(
+            .reply(InputMessage::new().html(
                 "Send a <b>proper URL</b> without http(s) or www to get WHOIS information!",
             ))
             .await?;
         return Ok(());
     } else {
         let msg = message
-            .reply(InputMessage::html(
+            .reply(InputMessage::new().html(
                 "<b>Extracting WHOIS information from given link...</b>",
             ))
             .await?;

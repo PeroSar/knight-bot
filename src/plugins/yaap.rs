@@ -7,11 +7,8 @@
 // Description: Gets the latest YAAP release according to the device.
 
 use crate::plugins;
-use grammers_client::{
-    button, reply_markup,
-    types::{InputMessage, Message},
-    Client,
-};
+use grammers_client::message::{Button, InputMessage, Message, ReplyMarkup};
+use grammers_client::Client;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -33,10 +30,10 @@ fn get_date(filename: &str) -> Option<String> {
     None
 }
 
-pub async fn knightcmd_yaap(client: Client, message: Message, device: String) -> Result {
+pub async fn knightcmd_yaap(client: Client, message: &Message, device: String) -> Result {
     if device.trim().is_empty() {
         message
-            .reply(InputMessage::html("Provide a device <b>codename</b>!"))
+            .reply(InputMessage::new().html("Provide a device <b>codename</b>!"))
             .await?;
         return Ok(());
     }
@@ -65,7 +62,7 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
         }
         None => {
             message
-                .reply(InputMessage::html(
+                .reply(InputMessage::new().html(
                     "Failed to get YAAP release information! (OTA Branch)",
                 ))
                 .await?;
@@ -105,7 +102,7 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
         }
         None => {
             message
-                .reply(InputMessage::html(
+                .reply(InputMessage::new().html(
                     "Failed to get YAAP release information! (Gapps)",
                 ))
                 .await?;
@@ -124,7 +121,7 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
         }
         None => {
             message
-                .reply(InputMessage::html(
+                .reply(InputMessage::new().html(
                     "Failed to get YAAP release information! (Vanilla)",
                 ))
                 .await?;
@@ -136,12 +133,12 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
         .or_else(|| get_date(&vanilla_link))
         .unwrap_or("Unknown".to_string());
 
-    msg = InputMessage::html(format!(
+    msg = InputMessage::new().html(format!(
         "<b>Latest YAAP Releases for {} ({})</b>:",
         device, date
     ))
-    .reply_markup(&reply_markup::inline(vec![
-        vec![button::url(
+    .reply_markup(ReplyMarkup::from_buttons(&vec![
+        vec![Button::url(
             "Gapps",
             format!(
                 "https://mirror.codebucket.de/yaap/{}/{}",
@@ -149,7 +146,7 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
                 gapps_link.to_string().trim_matches('"').to_string()
             ),
         )],
-        vec![button::url(
+        vec![Button::url(
             "Vanilla",
             format!(
                 "https://mirror.codebucket.de/yaap/{}/vanilla/{}",
@@ -161,7 +158,7 @@ pub async fn knightcmd_yaap(client: Client, message: Message, device: String) ->
 
     if let Some(id) = message.reply_to_message_id() {
         client
-            .send_message(message.chat(), msg.reply_to(Some(id)))
+            .send_message(message.peer_ref().await.unwrap(), msg.reply_to(Some(id)))
             .await?;
     } else {
         message.reply(msg).await?;
